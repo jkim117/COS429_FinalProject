@@ -142,29 +142,33 @@ def inpaint_fmm_single(point, point_image, img_grad, eps):
 					not checkBounds(xk, yl-1, 0, 0, point_image.shape)):	
 
 					r = np.array([xk - point.x, yl - point.y])
-					gradT_X = point_image[xk+1, yl].I - point_image[xk-1, yl].T
-					gradT_Y = point_image[xk, yl+1].I - point_image[xk, yl-1].T
+					gradT_X = point_image[xk+1, yl].T - point_image[xk-1, yl].T
+					gradT_Y = point_image[xk, yl+1].T - point_image[xk, yl-1].T
 					gradT = np.array([gradT_X, gradT_Y]) # use same approx as gradI???
 					lenr = np.linalg.norm(r)
 
 					direction = np.sum(r * gradT) / lenr
+					
 					dst = 1 / (lenr * lenr)
 					lev = 1 / (1 + np.absolute(point.T - point_image[xk, yl].T))
 
-					w = direction * dst * lev
+					w = np.absolute(direction * dst * lev)
+					if (w == 0.0):
+						w = 1e-6
+
+					#print(w>0)
 					#print(w)
 					#print(point_image[xk+1, yl].f ,point_image[xk-1, yl].f,point_image[xk, yl+1].f,point_image[xk, yl-1].f)
 
-					if (point_image[xk+1, yl].f == KNOWN and point_image[xk-1, yl].f == KNOWN and point_image[xk, yl+1].f == KNOWN and point_image[xk, yl-1].f == KNOWN):
-						gradI_X = point_image[xk+1, yl].I - point_image[xk-1, yl].I
-						gradI_Y = point_image[xk, yl+1].I - point_image[xk, yl-1].I
-						gradI = np.array([gradI_X, gradI_Y])		
-						#print('hiii')		
+					#if (point_image[xk+1, yl].f == KNOWN and point_image[xk-1, yl].f == KNOWN and point_image[xk, yl+1].f == KNOWN and point_image[xk, yl-1].f == KNOWN):
+					gradI_X = float(point_image[xk+1, yl].I) - float(point_image[xk-1, yl].I)
+					gradI_Y = float(point_image[xk, yl+1].I) - float(point_image[xk, yl-1].I)
+					gradI = np.array([gradI_X, gradI_Y])		
+					#print('hiii')		
 
-						Ia += w * point_image[xk, yl].I + np.sum(gradI * r)
-						s += w
-	if (s == 0.0):
-		return -1
+					Ia += w * point_image[xk, yl].I #+ np.absolute(np.sum(gradI * r)))
+					s += w
+	#print(Ia/s)
 	point_image[point.x, point.y].I = Ia / s
 	return 0
 	#print(Ia)
@@ -191,16 +195,13 @@ def solveT(i1, j1, i2, j2, point_image):
 			sol = 1 + point_image[i1,j1].T
 		
 	elif (point_image[i2,j2].f == KNOWN):
-		if (checkBounds(i1, j2, 0, 0, point_image.shape)):
-			return np.inf
-
-		sol = 1 + point_image[i1,j2].T
+		sol = 1 + point_image[i2,j2].T
 	
 	return sol
 
 
 def inpaint_fmm(img, mask, eps = 10):
-	new_img = np.zeros(img.shape)	
+	new_img = np.zeros(img.shape, dtype=np.uint8)	
 	for i in range(img.shape[2]):
 		img_channel = img[:,:,i]
 		img_grad = cv2.Laplacian(img_channel, cv2.CV_64F)
@@ -228,6 +229,7 @@ def inpaint_fmm(img, mask, eps = 10):
 								point_image[bandPoint.x, bandPoint.y].f = BAND
 								point_image[bandPoint.x, bandPoint.y].T += 1
 								heapq.heappush(bandHeap, point_image[bandPoint.x, bandPoint.y])
+								continue
 
 						# if out of bounds, solveT = INF
 						point_image[xk, yl].T = min([solveT(xk - 1, yl, xk, yl - 1, point_image),
