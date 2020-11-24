@@ -32,12 +32,12 @@ def pad_mask(shape, mask, pad_size=1):
 def create_mask(img, mask_list, pad_size=1):
 	shape = (*img.shape[:2], 1)
 	comb_mask = np.zeros(shape, dtype=np.uint8)
-	# i =0
+	i =0
 
 	for mask in mask_list:
-		# if i ==0:
+		if i ==0:
 			comb_mask[mask] = 255
-			# i += 1
+			i += 1
 
 	comb_mask = pad_mask(shape, comb_mask, pad_size)
 
@@ -210,7 +210,16 @@ def inpaint_exemplar(img, mask, eps = 9):
 					mask[x+deltax, y+deltay, 0] = 0
 
 		bandHeap, point_image = findBand(img, mask, point_image=point_image)
-	return new_img
+
+		# cv2.imshow('fast marching', mask)
+		# cv2.waitKey(0)
+		# cv2.destroyAllWindows()
+		# cv2.imshow('fast marching', img)
+		# cv2.waitKey(0)
+		# cv2.destroyAllWindows()
+
+
+	return img
 
 mask = create_mask(img, list(dogs.values()), 1)
 # mask = create_mask(img, list(person.values()), 10)
