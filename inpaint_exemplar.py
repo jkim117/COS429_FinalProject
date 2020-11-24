@@ -9,7 +9,7 @@ INSIDE = 2
 
 img = cv2.imread('test.jpg')
 
-person = np.load('persons.npz')
+# person = np.load('persons.npz')
 
 dogs = np.load('dogs.npz')
 
@@ -32,9 +32,12 @@ def pad_mask(shape, mask, pad_size=1):
 def create_mask(img, mask_list, pad_size=1):
 	shape = (*img.shape[:2], 1)
 	comb_mask = np.zeros(shape, dtype=np.uint8)
+	# i =0
 
 	for mask in mask_list:
-		comb_mask[mask] = 255
+		# if i ==0:
+			comb_mask[mask] = 255
+			# i += 1
 
 	comb_mask = pad_mask(shape, comb_mask, pad_size)
 
@@ -58,6 +61,7 @@ def checkBounds(x, y, deltax, deltay, shape):
 	return False # falls within bounds
 
 def findBand(img, mask, first=False, point_image=None):
+	print(np.sum(mask/255.0))
 	bandHeap = []
 	if first:
 		point_image = np.empty(shape = img.shape[:2], dtype = object)
@@ -90,13 +94,17 @@ def findBand(img, mask, first=False, point_image=None):
 	return bandHeap, point_image
 
 # min dist between bandPoint neighborhood and neighborhood within known
-def find_min_neighborhood(patch, known_patch_mask, point_img, eps):
+def find_min_neighborhood(x, y, patch, known_patch_mask, point_img, eps):
 	min_dist = np.inf
 	min_middle = (-1, -1) 
 
-	for i in range(eps, point_img.shape[0] - eps):
-		for j in range(eps, point_img.shape[1] - eps):
+	# for i in range(eps, point_img.shape[0] - eps):
+	# 	for j in range(eps, point_img.shape[1] - eps):
+	for i in range(x-100, x+101):
+		for j in range(y-100, y+101):
+
 			break_iter = False
+
 
 			comp_patch = np.zeros((2*eps+1, 2*eps+1, 3))
 
@@ -130,6 +138,7 @@ def inpaint_exemplar(img, mask, eps = 9):
 	area = (eps*2+1)**2
 
 	while(len(bandHeap) > 0):
+		print(len(bandHeap))
 		# compute data terms
 		for point in bandHeap:
 			x = point.x
@@ -188,7 +197,7 @@ def inpaint_exemplar(img, mask, eps = 9):
 					patch[i-x+eps, j-y+eps, :] = point_image[i, j].I
 					known_patch_mask[i-x+eps, j-y+eps, :] = [1, 1, 1]
 
-		best_x, best_y = find_min_neighborhood(patch, known_patch_mask, point_image, eps)
+		best_x, best_y = find_min_neighborhood(x, y, patch, known_patch_mask, point_image, eps)
 
 		# inpaint, update img and point_img
 		for deltax in range(-eps, eps+1):
@@ -201,20 +210,19 @@ def inpaint_exemplar(img, mask, eps = 9):
 					mask[x+deltax, y+deltay, 0] = 0
 
 		bandHeap, point_image = findBand(img, mask, point_image=point_image)
-
 	return new_img
 
-
-mask = create_mask(img, list(dogs.values()), 5)
+mask = create_mask(img, list(dogs.values()), 1)
 # mask = create_mask(img, list(person.values()), 10)
 print(img.shape)
 final_img = inpaint_exemplar(img, mask, eps = 4)
 
-fast_marching = cv2.inpaint(img, mask, 2, cv2.INPAINT_TELEA)
+# fast_marching = cv2.inpaint(img, mask, 2, cv2.INPAINT_TELEA)
 #navier_stokes = cv2.inpaint(img, mask, 2, cv2.INPAINT_NS)
 
 # cv2.imshow('fast marching', fast_marching)
-cv2.imshow('navier stokes', final_img)
-cv2.waitKey(0)
-cv2.destroyAllWindows()
+# cv2.imshow('navier stokes', final_img)
+cv2.imwrite('./DONE.jpg', final_img)
+# cv2.waitKey(0)
+# cv2.destroyAllWindows()
 
