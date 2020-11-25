@@ -57,14 +57,22 @@ def create_mask(img, mask_list, pad_size=1):
 	return comb_mask
 
 
-mask = create_mask(img, list(dogs.values()), 5)
+mask = create_mask(img, list(person.values()), 5)
+cv2.imwrite('mask_person.png', mask)
+
+for i in range(mask.shape[0]):
+	for j in range(mask.shape[1]):
+		if mask[i,j] == 255:
+			img[i,j,:] = [255, 255, 255]
+
+cv2.imwrite('person_input.png', img)
 # mask = create_mask(img, list(person.values()), 10)
 
-fast_marching = cv2.inpaint(img, mask, 2, cv2.INPAINT_TELEA)
+'''fast_marching = cv2.inpaint(img, mask, 2, cv2.INPAINT_TELEA)
 navier_stokes = cv2.inpaint(img, mask, 2, cv2.INPAINT_NS)
 
 # cv2.imshow('fast marching', fast_marching)
 cv2.imshow('navier stokes', navier_stokes)
 cv2.waitKey(0)
-cv2.destroyAllWindows()
+cv2.destroyAllWindows()'''
 
