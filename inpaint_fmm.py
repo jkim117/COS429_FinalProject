@@ -7,32 +7,40 @@ BAND = 0
 KNOWN = 1
 INSIDE = 2
 
-# img = cv2.imread('test.jpg')
+bear_img = cv2.imread('bear.jpg')
+bear = np.load('bear.npz')
+
+banana_img = cv2.imread('banana.jpg')
+banana = np.load('banana.npz')
+
+elephant_img = cv2.imread('elephant_people.jpg')
+elephant = np.load('elephant_people.npz')
+
+plane_img = cv2.imread('plane.jpg')
+plane = np.load('plane.npz')
+people = np.load('people.npz')
+
+airplanes_img = cv2.imread('airplane.jpg')
+airplane = np.load('airplane.npz')
+
+fence_img = cv2.imread('fence.jpg')
+fence = np.load('fence.npz')
+
+stuff_img = cv2.imread('stuff.jpg')
+stuff = np.load('stuff.npz')
+ppl = np.load('ppl.npz')
+
 img = cv2.imread('test.jpg')
-
-# get mask from rCNN
-# mask = cv2.imread('mask.jpg', cv2.IMREAD_GRAYSCALE)
 person = np.load('persons.npz')
-
-# person1 = person['x']
-# person2 = person['y']
-
 dogs = np.load('dogs.npz')
-'''
-dog1 = dogs['dog1']
-dog2 = dogs['dog2']
-dog3 = dogs['dog3']
-dog4 = dogs['dog4']
 
+motor_img = cv2.imread('motor.jpg')
+more_ppl = np.load('more_ppl.npz')
+motor = np.load('motor.npz')
 
-mask = np.zeros((425, 640, 1), dtype=np.uint8) # set everything to black
-# mask[person1] = 255
-# mask[person2] = 255
-mask[dog1] = 255
-mask[dog2] = 255
-mask[dog3] = 255
-mask[dog4] = 255
-'''
+donut_img = cv2.imread('donut.jpg')
+donut = np.load('donut.npz')
+knife = np.load('knife.npz')
 
 def pad_mask(shape, mask, pad_size=1):
 	height, width, _ = shape
@@ -245,18 +253,35 @@ def inpaint_fmm(img, mask, eps = 10):
 				new_channel[k,l] = point_image[k,l].I
 		
 		new_img[:,:,i] = new_channel
+		print('finished one channel')
 
 	return new_img
 
 
-mask = create_mask(img, list(dogs.values()), 5)
-# mask = create_mask(img, list(person.values()), 10)
-print(img.shape)
-final_img = inpaint_fmm(img, mask, eps = 3)
+# mask = create_mask(img, list(person.values()), 5)
+# mask = create_mask(img, list(dogs.values()), 5)
+mask = create_mask(bear_img, list(bear.values()), 5)
+# mask = create_mask(banana_img, list(banana.values()), 5)
+# mask = create_mask(elephant_img, list(elephant.values()), 5)
+# mask = create_mask(plane_img, list(plane.values()), 5)
+# mask = create_mask(plane_img, list(people.values()), 5)
+# mask = create_mask(airplanes_img, list(airplane.values()), 5)
+# mask = create_mask(fence_img, list(fence.values()), 5)
+# mask = create_mask(stuff_img, list(stuff.values()), 5)
+# mask = create_mask(stuff_img, list(ppl.values()), 5)
+# mask = create_mask(motor_img, list(more_ppl.values()), 5)
+# mask = create_mask(motor_img, list(motor.values()), 5)
+# mask = create_mask(donut_img, list(donut.values()), 5)
+# mask = create_mask(donut_img, list(knife.values()), 5)
+
+print('mask created')
+
+final_img = inpaint_fmm(bear_img, mask, eps = 3)
+'''
 
 fast_marching = cv2.inpaint(img, mask, 2, cv2.INPAINT_TELEA)
 #navier_stokes = cv2.inpaint(img, mask, 2, cv2.INPAINT_NS)
-
+'''
 # cv2.imshow('fast marching', fast_marching)
 cv2.imshow('navier stokes', final_img)
 cv2.waitKey(0)
