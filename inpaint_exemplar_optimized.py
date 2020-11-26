@@ -93,6 +93,16 @@ def findBand(img, mask, first=False, point_image=None):
 
 	return bandHeap, point_image
 
+def updateBand(bandHeapList, eps, x, y, point_image):
+	for deltax in range(-(eps+1), eps+2):
+		for deltay in range(-(eps+1), eps+2):
+			if not checkBounds(x+deltax, y+deltay, 0, 0, point_image.shape) and point_image[x+deltax, y+deltay].f == INSIDE:
+				point_image[x+deltax,y+deltay].f = BAND
+				bandHeapList.append(point_image[x+deltax,y+deltay])
+	
+	return bandHeapList
+
+
 # min dist between bandPoint neighborhood and neighborhood within known
 def find_min_neighborhood(x, y, patch, known_patch_mask, point_img, eps):
 	min_dist = np.inf
@@ -134,34 +144,55 @@ def find_min_neighborhood(x, y, patch, known_patch_mask, point_img, eps):
 def inpaint_exemplar(img, mask, eps = 9):
 	new_img = np.zeros(img.shape, dtype=np.uint8)
 	bandHeap, point_image = findBand(img, mask, True)
+	bandHeapList = bandHeap.copy()
 
 	area = (eps*2+1)**2
 
-	while(len(bandHeap) > 0):
-		print(len(bandHeap))
+	counter = 0
+	oldX = -1
+	oldY = -1
+
+	while(len(bandHeapList) > 0):
+		print(len(bandHeapList))
 		# compute data terms
-		for point in bandHeap:
+
+		'''counter += 1
+		print('counter', counter)
+		if counter % 1 == 0:
+			cv2.imshow('fast marching', img)
+			cv2.waitKey(0)
+			cv2.destroyAllWindows()
+			band_image = np.zeros(mask.shape)
+			for c in bandHeapList:
+				band_image[c.x,c.y] = 255
+			cv2.imshow('band', band_image)
+			cv2.waitKey(0)
+			cv2.destroyAllWindows()'''
+
+		# find normal 
+		grad_X = cv2.Scharr(mask, cv2.CV_64F, 1, 0)
+		grad_X = cv2.convertScaleAbs(grad_X).astype(float)
+		grad_Y = cv2.Scharr(mask, cv2.CV_64F, 0, 1)
+		grad_Y = cv2.convertScaleAbs(grad_Y).astype(float)
+
+		# find image gradient
+		gradI_X = cv2.Scharr(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), cv2.CV_64F, 1, 0)
+		gradI_X = cv2.convertScaleAbs(gradI_X).astype(float)
+		gradI_Y = cv2.Scharr(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), cv2.CV_64F, 0, 1)
+		gradI_Y = cv2.convertScaleAbs(gradI_Y).astype(float)
+
+		for point in bandHeapList:
 			x = point.x
 			y = point.y
-			if (checkBounds(x, y, 1, 1, img.shape)):
+			if oldX != -1 and oldY != -1 and np.sqrt((oldX-x)**2 + (oldY-y)**2) > np.sqrt(2) * 2 * (eps + 1):
 				continue
 
-			# find normal 
-			grad_X = cv2.Scharr(mask, cv2.CV_64F, 1, 0)
-			grad_X = cv2.convertScaleAbs(grad_X).astype(float)
-
-			grad_Y = cv2.Scharr(mask, cv2.CV_64F, 0, 1)
-			grad_Y = cv2.convertScaleAbs(grad_Y).astype(float)
+			if (checkBounds(x, y, 1, 1, img.shape)):
+				continue
+			
 			n = np.array([grad_X[x, y], grad_Y[x, y]])
 			n /= np.linalg.norm(n)
 			n = np.reshape(n, (len(n), 1))
-
-			# find image gradient
-			gradI_X = cv2.Scharr(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), cv2.CV_64F, 1, 0)
-			gradI_X = cv2.convertScaleAbs(gradI_X).astype(float)
-
-			gradI_Y = cv2.Scharr(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), cv2.CV_64F, 0, 1)
-			gradI_Y = cv2.convertScaleAbs(gradI_Y).astype(float)
 
 			total_conf = 0.0
 			max_grad = np.zeros(2)
@@ -205,16 +236,19 @@ def inpaint_exemplar(img, mask, eps = 9):
 				if not checkBounds(x+deltax, y+deltay, 0, 0, point_image.shape) and point_image[x+deltax, y+deltay].f != KNOWN:
 					point_image[x+deltax, y+deltay].I = img[best_x+deltax, best_y+deltay, :]
 					img[x+deltax, y+deltay, :] = img[best_x+deltax, best_y+deltay, :]
+					if point_image[x+deltax,y+deltay].f == BAND:
+						bandHeapList.remove(point_image[x+deltax, y+deltay])
+
 					point_image[x+deltax, y+deltay].f = KNOWN
 					point_image[x+deltax, y+deltay].conf = point_image[x, y].conf
 					mask[x+deltax, y+deltay, 0] = 0
 
-		bandHeap, point_image = findBand(img, mask, point_image=point_image)
+		bandHeap = updateBand(bandHeapList, eps, x, y, point_image)
+		oldX = x
+		oldY = y
+		bandHeapList = bandHeap.copy()
 
 		# cv2.imshow('fast marching', mask)
-		# cv2.waitKey(0)
-		# cv2.destroyAllWindows()
-		# cv2.imshow('fast marching', img)
 		# cv2.waitKey(0)
 		# cv2.destroyAllWindows()
 
@@ -231,7 +265,7 @@ final_img = inpaint_exemplar(img, mask, eps = 10)
 
 # cv2.imshow('fast marching', fast_marching)
 # cv2.imshow('navier stokes', final_img)
-cv2.imwrite('./DONE2.jpg', final_img)
+cv2.imwrite('./DONE1.jpg', final_img)
 # cv2.waitKey(0)
 # cv2.destroyAllWindows()
 
