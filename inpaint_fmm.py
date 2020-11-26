@@ -7,40 +7,42 @@ BAND = 0
 KNOWN = 1
 INSIDE = 2
 
-bear_img = cv2.imread('bear.jpg')
-bear = np.load('bear.npz')
+curr_dir = './eval_set/'
 
-banana_img = cv2.imread('banana.jpg')
-banana = np.load('banana.npz')
+bear_img = cv2.imread(curr_dir+'bear.jpg')
+bear = np.load(curr_dir+'bear.npz')
 
-elephant_img = cv2.imread('elephant_people.jpg')
-elephant = np.load('elephant_people.npz')
+banana_img = cv2.imread(curr_dir+'banana.jpg')
+banana = np.load(curr_dir+'banana.npz')
 
-plane_img = cv2.imread('plane.jpg')
-plane = np.load('plane.npz')
-people = np.load('people.npz')
+elephant_img = cv2.imread(curr_dir+'elephant_people.jpg')
+elephant = np.load(curr_dir+'elephant_people.npz')
 
-airplanes_img = cv2.imread('airplane.jpg')
-airplane = np.load('airplane.npz')
+plane_img = cv2.imread(curr_dir+'plane.jpg')
+plane = np.load(curr_dir+'plane.npz')
+people = np.load(curr_dir+'people.npz')
 
-fence_img = cv2.imread('fence.jpg')
-fence = np.load('fence.npz')
+airplanes_img = cv2.imread(curr_dir+'airplane.jpg')
+airplane = np.load(curr_dir+'airplane.npz')
 
-stuff_img = cv2.imread('stuff.jpg')
-stuff = np.load('stuff.npz')
-ppl = np.load('ppl.npz')
+fence_img = cv2.imread(curr_dir+'fence.jpg')
+fence = np.load(curr_dir+'fence.npz')
 
-img = cv2.imread('test.jpg')
-person = np.load('persons.npz')
-dogs = np.load('dogs.npz')
+stuff_img = cv2.imread(curr_dir+'stuff.jpg')
+stuff = np.load(curr_dir+'stuff.npz')
+ppl = np.load(curr_dir+'ppl.npz')
 
-motor_img = cv2.imread('motor.jpg')
-more_ppl = np.load('more_ppl.npz')
-motor = np.load('motor.npz')
+img = cv2.imread(curr_dir+'test.jpg')
+person = np.load(curr_dir+'persons.npz')
+dogs = np.load(curr_dir+'dogs.npz')
 
-donut_img = cv2.imread('donut.jpg')
-donut = np.load('donut.npz')
-knife = np.load('knife.npz')
+motor_img = cv2.imread(curr_dir+'motor.jpg')
+more_ppl = np.load(curr_dir+'more_ppl.npz')
+motor = np.load(curr_dir+'motor.npz')
+
+donut_img = cv2.imread(curr_dir+'donut.jpg')
+donut = np.load(curr_dir+'donut.npz')
+knife = np.load(curr_dir+'knife.npz')
 
 def pad_mask(shape, mask, pad_size=1):
 	height, width, _ = shape
@@ -265,14 +267,20 @@ def inpaint_fmm(img, mask, eps = 10):
 imgs = [bear_img, banana_img, elephant_img, plane_img, plane_img, airplanes_img, fence_img, stuff_img, stuff_img, img, img, motor_img, motor_img, donut_img, donut_img]
 npzs = [bear, banana, elephant, plane, people, airplane, fence, stuff, ppl, person, dogs, more_ppl, motor, donut, knife]
 
-for i in range(len(imgs)):
-	img = imgs[i]
-	npz = npzs[i]
-	mask = create_mask(img, list(npz.values()), 5)
-	cv2.imwrite(str(i) + 'mask.jpg', mask)
+# for i in range(len(imgs)):
+# 	img = imgs[i]
+# 	npz = npzs[i]
+# 	mask = create_mask(img, list(npz.values()), 5)
+# 	cv2.imwrite(str(i) + 'mask.jpg', mask)
 	# print(i, 'mask created')
 	# final_img = inpaint_fmm(img, mask, eps = 3)
 	# cv2.imwrite(str(i) + 'DONE.jpg', final_img)
+
+# mask = create_mask(bear_img, list(bear.values()), 20)
+# cv2.imwrite('biggest_mask.jpg', mask)
+mask = cv2.cvtColor(cv2.imread('biggest_mask.jpg'), cv2.COLOR_BGR2GRAY)
+final_img = inpaint_fmm(bear_img, np.expand_dims(mask, 2), eps = 3)
+cv2.imwrite('biggest_DONE.jpg', final_img)
 
 '''
 fast_marching = cv2.inpaint(img, mask, 2, cv2.INPAINT_TELEA)
