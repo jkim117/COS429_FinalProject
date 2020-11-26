@@ -177,6 +177,10 @@ def inpaint_fmm_single(point, point_image, img_grad, eps):
 					Ia += w * point_image[xk, yl].I #+ np.absolute(np.sum(gradI * r)))
 					s += w
 	#print(Ia/s)
+	if s == 0.0:
+		point_image[point.x, point.y].f = INSIDE
+		return 0
+
 	point_image[point.x, point.y].I = Ia / s
 	return 0
 	#print(Ia)
@@ -258,32 +262,24 @@ def inpaint_fmm(img, mask, eps = 10):
 	return new_img
 
 
-# mask = create_mask(img, list(person.values()), 5)
-# mask = create_mask(img, list(dogs.values()), 5)
-mask = create_mask(bear_img, list(bear.values()), 5)
-# mask = create_mask(banana_img, list(banana.values()), 5)
-# mask = create_mask(elephant_img, list(elephant.values()), 5)
-# mask = create_mask(plane_img, list(plane.values()), 5)
-# mask = create_mask(plane_img, list(people.values()), 5)
-# mask = create_mask(airplanes_img, list(airplane.values()), 5)
-# mask = create_mask(fence_img, list(fence.values()), 5)
-# mask = create_mask(stuff_img, list(stuff.values()), 5)
-# mask = create_mask(stuff_img, list(ppl.values()), 5)
-# mask = create_mask(motor_img, list(more_ppl.values()), 5)
-# mask = create_mask(motor_img, list(motor.values()), 5)
-# mask = create_mask(donut_img, list(donut.values()), 5)
-# mask = create_mask(donut_img, list(knife.values()), 5)
+imgs = [bear_img, banana_img, elephant_img, plane_img, plane_img, airplanes_img, fence_img, stuff_img, stuff_img, img, img, motor_img, motor_img, donut_img, donut_img]
+npzs = [bear, banana, elephant, plane, people, airplane, fence, stuff, ppl, person, dogs, more_ppl, motor, donut, knife]
 
-print('mask created')
+for i in range(len(imgs)):
+	img = imgs[i]
+	npz = npzs[i]
+	mask = create_mask(img, list(npz.values()), 5)
+	cv2.imwrite(str(i) + 'mask.jpg', mask)
+	# print(i, 'mask created')
+	# final_img = inpaint_fmm(img, mask, eps = 3)
+	# cv2.imwrite(str(i) + 'DONE.jpg', final_img)
 
-final_img = inpaint_fmm(bear_img, mask, eps = 3)
 '''
-
 fast_marching = cv2.inpaint(img, mask, 2, cv2.INPAINT_TELEA)
 #navier_stokes = cv2.inpaint(img, mask, 2, cv2.INPAINT_NS)
 '''
 # cv2.imshow('fast marching', fast_marching)
-cv2.imshow('navier stokes', final_img)
-cv2.waitKey(0)
-cv2.destroyAllWindows()
+# cv2.imshow('navier stokes', final_img)
+# cv2.waitKey(0)
+# cv2.destroyAllWindows()
 
