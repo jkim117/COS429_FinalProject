@@ -133,21 +133,24 @@ def updateBand(bandHeapList, eps, x, y, point_image):
 	
 	return bandHeapList
 
-
 # min dist between bandPoint neighborhood and neighborhood within known
-def find_min_neighborhood(x, y, patch, known_patch_mask, point_img, eps):
+def find_min_neighborhood(x, y, patch, known_patch_mask, point_img, img, eps):
 	min_dist = np.inf
 	min_middle = (-1, -1) 
 
-	# for i in range(eps, point_img.shape[0] - eps):
-	# 	for j in range(eps, point_img.shape[1] - eps):
-	#for i in range(x-100, x+101):
-	#	for j in range(y-100, y+101):
+	# TODO: temp set img to zero where unknown
+	temp_img = copy.deepcopy(img)
+	temp_img[x-eps:x+eps+1, y-eps:y+eps+1, :] = temp_img[x-eps:x+eps+1, y-eps:y+eps+1, :] * known_patch_mask
+
+	# TODO: sift descriptor for patch
+	sift = cv2.xfeatures2d_SIFT.create() # cv2.SIFT()
+	_, sift_patch = sift.compute(img, [cv2.KeyPoint(x, y, _size=2*eps+1)])
+	print(sift_patch) # all zeros...
+
 	for i in range(0, point_img.shape[0]):
 		for j in range(0, point_img.shape[1]):
 
 			break_iter = False
-
 
 			comp_patch = np.zeros((2*eps+1, 2*eps+1, 3))
 
@@ -165,8 +168,13 @@ def find_min_neighborhood(x, y, patch, known_patch_mask, point_img, eps):
 
 			if (np.sum(comp_patch) == 0 or break_iter):
 				continue 
-
-			curr_dist = np.sum(((patch - comp_patch)**2) * known_patch_mask)
+			
+			# TODO: temp set img to zero where unknown
+			temp_img = copy.deepcopy(img)
+			temp_img[i-eps:i+eps+1, j-eps:j+eps+1, :] = temp_img[i-eps:i+eps+1, j-eps:j+eps+1, :] * known_patch_mask
+			_, sift_comp_patch = sift.compute(img, [cv2.KeyPoint(i, j, _size=2*eps+1)]) # TODO: replace w sift
+			# print(sift_comp_patch)
+			curr_dist = np.sum((sift_patch - sift_comp_patch)**2) 
 					 
 			if (min_dist > curr_dist):
 				min_dist = curr_dist
@@ -190,19 +198,6 @@ def inpaint_exemplar(img, mask, eps = 9):
 	while(len(bandHeapList) > 0):
 		print(len(bandHeapList))
 		# compute data terms
-
-		'''counter += 1
-		print('counter', counter)
-		if counter % 1 == 0:
-			cv2.imshow('fast marching', img)
-			cv2.waitKey(0)
-			cv2.destroyAllWindows()
-			band_image = np.zeros(mask.shape)
-			for c in bandHeapList:
-				band_image[c.x,c.y] = 255
-			cv2.imshow('band', band_image)
-			cv2.waitKey(0)
-			cv2.destroyAllWindows()'''
 
 		# find normal 
 		grad_X = cv2.Scharr(mask, cv2.CV_64F, 1, 0)
@@ -263,7 +258,7 @@ def inpaint_exemplar(img, mask, eps = 9):
 					patch[i-x+eps, j-y+eps, :] = point_image[i, j].I
 					known_patch_mask[i-x+eps, j-y+eps, :] = [1, 1, 1]
 
-		best_x, best_y = find_min_neighborhood(x, y, patch, known_patch_mask, point_image, eps)
+		best_x, best_y = find_min_neighborhood(x, y, patch, known_patch_mask, point_image, img, eps)
 
 		# inpaint, update img and point_img
 		for deltax in range(-eps, eps+1):
@@ -277,6 +272,9 @@ def inpaint_exemplar(img, mask, eps = 9):
 					point_image[x+deltax, y+deltay].f = KNOWN
 					point_image[x+deltax, y+deltay].conf = point_image[x, y].conf
 					mask[x+deltax, y+deltay, 0] = 0
+
+		# TODO: smooth / run gaussian filter over patch edge 
+		smooth_filter = np.zeros(3, 3) + (1/9.0)
 
 		bandHeap = updateBand(bandHeapList, eps, x, y, point_image)
 		oldX = x
@@ -292,7 +290,7 @@ def inpaint_exemplar(img, mask, eps = 9):
 
 imgs = [bear_img, banana_img, elephant_img, plane_img, plane_img, airplanes_img, fence_img, stuff_img, stuff_img, img, img, motor_img, motor_img, donut_img, donut_img]
 npzs = [bear, banana, elephant, plane, people, airplane, fence, stuff, ppl, person, dogs, more_ppl, motor, donut, knife]
-
+'''
 for i in range(0, len(imgs)):
 	# len(imgs)
 	img = imgs[i]
@@ -302,24 +300,15 @@ for i in range(0, len(imgs)):
 	print(i, 'mask created')
 	final_img = inpaint_exemplar(img, mask, eps = 3)
 	cv2.imwrite('./outputs/'+ str(i) + 'DONE.jpg', final_img)
-
-# mask = create_mask(img, list(dogs.values()), 20)
-
+'''
 # resize mask and img
 #mask = cv2.resize(mask, (100, 150))
 #img = cv2.resize(img, (100, 150))
 
-# mask = create_mask(img, list(person.values()), 10)
-# print(img.shape)
-# print(mask.shape)
-# final_img = inpaint_exemplar(img, mask, eps = 10)
+mask = create_mask(img, list(person.values()), 5)
+final_img = inpaint_exemplar(img, mask, eps = 3)
 
-# fast_marching = cv2.inpaint(img, mask, 2, cv2.INPAINT_TELEA)
-#navier_stokes = cv2.inpaint(img, mask, 2, cv2.INPAINT_NS)
-
-# cv2.imshow('fast marching', fast_marching)
-# cv2.imshow('navier stokes', final_img)
-# cv2.imwrite('./DONE1.jpg', final_img)
+# cv2.imshow('fast marching', final_img)
 # cv2.waitKey(0)
 # cv2.destroyAllWindows()
 
