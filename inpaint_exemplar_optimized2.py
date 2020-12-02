@@ -7,11 +7,10 @@ BAND = 0
 KNOWN = 1
 INSIDE = 2
 
-img = cv2.imread('./eval_set/bear.jpg')
+curr_dir = './eval_set/'
 
-# person = np.load('persons.npz')
-
-dogs = np.load('./eval_set/bear.npz')
+img = cv2.imread('test.jpg')
+dogs = np.load(curr_dir+'dogs.npz')
 
 def pad_mask(shape, mask, pad_size=1):
 	height, width, _ = shape
@@ -61,7 +60,7 @@ def checkBounds(x, y, deltax, deltay, shape):
 	return False # falls within bounds
 
 def findBand(img, mask, first=False, point_image=None):
-	print(np.sum(mask/255.0))
+	# print(np.sum(mask/255.0))
 	bandHeap = []
 	if first:
 		point_image = np.empty(shape = img.shape[:2], dtype = object)
@@ -106,46 +105,51 @@ def updateBand(bandHeapList, eps, x, y, point_image):
 # min dist between bandPoint neighborhood and neighborhood within known
 def find_min_neighborhood(x, y, patch, known_patch_mask, point_img, eps):
 	min_dist = np.inf
-	min_middle = (-1, -1) 
+	min_point = (-1, -1) 
+	x_range = patch.shape[0]
+	y_range = patch.shape[1]
 
 	# for i in range(eps, point_img.shape[0] - eps):
 	# 	for j in range(eps, point_img.shape[1] - eps):
-	#for i in range(x-100, x+101):
-	#	for j in range(y-100, y+101):
-	for i in range(0, point_img.shape[0]):
-		for j in range(0, point_img.shape[1]):
+	# search a neighborhood of 100 but use the upper left corner as the index to search 
+	for i in range(x-100, x+101):
+		for j in range(y-100, y+101):
 
 			break_iter = False
 
+			comp_patch = np.zeros((x_range, y_range, 3))
 
-			comp_patch = np.zeros((2*eps+1, 2*eps+1, 3))
-
-			for deltax in range(-eps, eps+1):
+			for deltax in range(0, x_range):
 				if break_iter:
 					break
 
-				for deltay in range(-eps, eps+1):
-					if checkBounds(i + deltax, j + deltay, 0, 0, point_img.shape) or point_img[i+deltax, j+deltay].f != KNOWN:
+				for deltay in range(0, y_range):
+					if not checkBounds(i+deltax, j+deltay, 0, 0, point_img.shape):
+						if point_img[i+deltax, j+deltay].f != KNOWN:
+							break_iter = True
+							break
+
+						comp_patch[deltax, deltay, :] = point_img[i+deltax, j+deltay].I
+
+					else:
 						break_iter = True
 						break
 
-					comp_patch[deltax+eps, deltay+eps, :] = point_img[i+deltax, j+deltay].I
+			if break_iter:
+				continue
 
-
-			if (np.sum(comp_patch) == 0 or break_iter):
+			if (np.sum(comp_patch) == 0):
 				continue 
 
 			curr_dist = np.sum(((patch - comp_patch)**2) * known_patch_mask)
 					 
 			if (min_dist > curr_dist):
 				min_dist = curr_dist
-				min_middle = (i, j)
+				min_point = (i, j)
 
-	if min_middle == (-1, -1):
-		print('FATAL ERROR. NO COMP PATCH FOUND. CONSIDER SMALLLER EPS SIZE')
-	return min_middle
+	return min_point
 
-def inpaint_exemplar(img, mask, eps = 9):
+def inpaint_exemplar2(img, mask, eps = 9):
 	new_img = np.zeros(img.shape, dtype=np.uint8)
 	bandHeap, point_image = findBand(img, mask, True)
 	bandHeapList = bandHeap.copy()
@@ -259,23 +263,173 @@ def inpaint_exemplar(img, mask, eps = 9):
 
 	return img
 
-mask = create_mask(img, list(dogs.values()), 20)
+def inpaint_exemplar(img, mask, eps = 9):
+	new_img = np.zeros(img.shape, dtype=np.uint8)
+	bandHeap, point_image = findBand(img, mask, True)
+	bandHeapList = bandHeap.copy()
 
-# resize mask and img
-#mask = cv2.resize(mask, (100, 150))
-#img = cv2.resize(img, (100, 150))
+	area = (eps*2+1)**2
 
+	print(img.shape)
+
+	counter = 0
+	oldX = -1
+	oldY = -1
+
+	while(len(bandHeapList) > 0):
+		print(len(bandHeapList))
+		# compute data terms
+
+		'''counter += 1
+		print('counter', counter)
+		if counter % 1 == 0:
+			cv2.imshow('fast marching', img)
+			cv2.waitKey(0)
+			cv2.destroyAllWindows()
+			band_image = np.zeros(mask.shape)
+			for c in bandHeapList:
+				band_image[c.x,c.y] = 255
+			cv2.imshow('band', band_image)
+			cv2.waitKey(0)
+			cv2.destroyAllWindows()'''
+
+		# find normal 
+		grad_X = cv2.Scharr(mask, cv2.CV_64F, 1, 0)
+		grad_X = cv2.convertScaleAbs(grad_X).astype(float)
+		grad_Y = cv2.Scharr(mask, cv2.CV_64F, 0, 1)
+		grad_Y = cv2.convertScaleAbs(grad_Y).astype(float)
+
+		# find image gradient
+		gradI_X = cv2.Scharr(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), cv2.CV_64F, 1, 0)
+		gradI_X = cv2.convertScaleAbs(gradI_X).astype(float)
+		gradI_Y = cv2.Scharr(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), cv2.CV_64F, 0, 1)
+		gradI_Y = cv2.convertScaleAbs(gradI_Y).astype(float)
+
+		for point in bandHeapList:
+			x = point.x
+			y = point.y
+			if oldX != -1 and oldY != -1 and np.sqrt((oldX-x)**2 + (oldY-y)**2) > np.sqrt(2) * 2 * (eps + 1):
+				continue
+
+			if (checkBounds(x, y, 1, 1, img.shape)):
+				continue
+			
+			n = np.array([grad_X[x, y], grad_Y[x, y]])
+			n /= np.linalg.norm(n)
+			n = np.reshape(n, (len(n), 1))
+
+			total_conf = 0.0
+			max_grad = np.zeros(2)
+			max_norm = -1
+			for i in range(x-eps, x+eps+1):
+				for j in range(y-eps, y+eps+1):
+					if not checkBounds(i, j, 0, 0, img.shape):
+						total_conf += point_image[i, j].conf
+
+						curr_norm = np.sum(gradI_X[i, j]**2 + gradI_Y[i, j]**2)
+						if curr_norm > max_norm:
+							max_grad = [i, j]
+							max_norm = curr_norm
+
+			point.conf = total_conf / area
+
+			gradI = np.array([max_grad[1], -max_grad[0]])
+			point.data = np.abs(np.sum(n * gradI)) / 255	
+
+		heapq.heapify(bandHeap)
+		# use the boundary point with the highest priority 
+		bandPoint = heapq.heappop(bandHeap)
+		x = bandPoint.x
+		y = bandPoint.y
+		point_image[x, y].f == KNOWN
+
+		patch = np.zeros((2*eps+1, 2*eps+1, 3))
+		known_patch_mask = np.zeros((2*eps+1, 2*eps+1, 3))
+
+		x_min = 2*eps+1
+		x_max = -1
+		y_min = 2*eps+1 
+		y_max = -1
+
+		for i in range(x-eps, x+eps+1):
+			if checkBounds(i, 0, 0, 0, point_image.shape):
+				continue
+
+			curr_x = i-x+eps
+			if curr_x < x_min:
+				x_min = curr_x
+			if curr_x > x_max:
+				x_max = curr_x
+
+			for j in range(y-eps, y+eps+1):
+				if not checkBounds(i, j, 0, 0, point_image.shape):
+					curr_y = j-y+eps
+					if curr_y < y_min:
+						y_min = curr_y
+					if curr_y > y_max:
+						y_max = curr_y					
+
+					if point_image[i, j].f == KNOWN:
+						patch[curr_x, curr_y, :] = point_image[i, j].I
+						known_patch_mask[curr_x, curr_y, :] = [1, 1, 1]
+
+		new_patch = patch[x_min:x_max+1, y_min:y_max+1, :]
+		new_patch_mask = known_patch_mask[x_min:x_max+1, y_min:y_max+1, :]
+		best_x, best_y = find_min_neighborhood(x, y, new_patch, new_patch_mask, point_image, eps)
+		print(best_x, best_y, new_patch.shape, new_patch_mask.shape)
+
+		x_range = patch.shape[0]
+		y_range = patch.shape[1]
+		# inpaint, update img and point_img -- use upper left corner 
+		for deltax in range(0, x_range):
+			for deltay in range(0, y_range):
+				if not checkBounds(x+deltax, y+deltay, 0, 0, point_image.shape) and point_image[x+deltax, y+deltay].f != KNOWN:
+					point_image[x+deltax, y+deltay].I = img[best_x+deltax, best_y+deltay, :]
+					img[x+deltax, y+deltay, :] = img[best_x+deltax, best_y+deltay, :]
+					if point_image[x+deltax,y+deltay].f == BAND:
+						bandHeapList.remove(point_image[x+deltax, y+deltay])
+
+					point_image[x+deltax, y+deltay].f = KNOWN
+					point_image[x+deltax, y+deltay].conf = point_image[x, y].conf
+					mask[x+deltax, y+deltay, 0] = 0
+
+		bandHeap = updateBand(bandHeapList, eps, x, y, point_image)
+		oldX = x
+		oldY = y
+		bandHeapList = bandHeap.copy()
+
+		# cv2.imshow('fast marching', mask)
+		# cv2.waitKey(0)
+		# cv2.destroyAllWindows()
+
+
+	return img
+
+mask = create_mask(img, list(dogs.values()), 2)
 # mask = create_mask(img, list(person.values()), 10)
 print(img.shape)
-print(mask.shape)
-final_img = inpaint_exemplar(img, mask, eps = 10)
+final_img = inpaint_exemplar2(img, mask, eps = 10)
 
 # fast_marching = cv2.inpaint(img, mask, 2, cv2.INPAINT_TELEA)
 #navier_stokes = cv2.inpaint(img, mask, 2, cv2.INPAINT_NS)
 
 # cv2.imshow('fast marching', fast_marching)
 # cv2.imshow('navier stokes', final_img)
-cv2.imwrite('./DONE1.jpg', final_img)
+cv2.imwrite('./DONE2.jpg', final_img)
+# cv2.waitKey(0)
+# cv2.destroyAllWindows()
+
+# mask = create_mask(img, list(dogs.values()), 2)
+# mask = create_mask(img, list(person.values()), 10)
+# print(img.shape)
+# final_img = inpaint_exemplar(img, mask, eps = 10)
+
+# fast_marching = cv2.inpaint(img, mask, 2, cv2.INPAINT_TELEA)
+#navier_stokes = cv2.inpaint(img, mask, 2, cv2.INPAINT_NS)
+
+# cv2.imshow('fast marching', fast_marching)
+# cv2.imshow('navier stokes', final_img)
+# cv2.imwrite('./DONE1.jpg', final_img)
 # cv2.waitKey(0)
 # cv2.destroyAllWindows()
 
