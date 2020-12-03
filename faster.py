@@ -138,14 +138,24 @@ def find_min_neighborhood(x, y, patch, known_patch_mask, point_img, img, eps):
 	min_middle = (-1, -1) 
 
 	# TODO: temp set img to zero where unknown
-	temp_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-	temp_img[x-eps:x+eps+1, y-eps:y+eps+1] = temp_img[x-eps:x+eps+1, y-eps:y+eps+1] * known_patch_mask[:,:,0]
+	temp = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+	# temp_img[x-eps:x+eps+1, y-eps:y+eps+1] = temp_img[x-eps:x+eps+1, y-eps:y+eps+1] * known_patch_mask[:,:,0]
+
+	curr_patch = np.zeros((2*eps+1, 2*eps+1, 2))
+	for deltax in range(-eps, eps+1):
+		for deltay in range(-eps, eps+1):
+			if checkBounds(x+deltax, y+deltay, 1, 1, point_img.shape):
+				known_patch_mask[deltax+eps,deltay+eps,:] = [0, 0, 0]
+
+			else:
+				curr_patch[deltax+eps, deltay+eps, 0] = float(temp[x+deltax+1, y+deltay]) - float(temp[x+deltax-1, y+deltay])
+				curr_patch[deltax+eps, deltay+eps, 1] = float(temp[x+deltax, y+deltay+1]) - float(temp[x+deltax, y+deltay-1])
 
 	# TODO: sift descriptor for patch
-	sift = cv2.xfeatures2d_SIFT.create() # cv2.SIFT()
-	_, sift_patch = sift.compute(temp_img, [cv2.KeyPoint(x, y, _size=2*eps+1)])
-	print(sift_patch) # all zeros...
-	print(temp_img[x-eps:x+eps+1, y-eps:y+eps+1])
+	# sift = cv2.xfeatures2d_SIFT.create() # cv2.SIFT()
+	# _, sift_patch = sift.compute(temp_img, [cv2.KeyPoint(x, y, _size=2*eps+1)])
+	# print(sift_patch) # all zeros...
+	# print(temp_img[x-eps:x+eps+1, y-eps:y+eps+1])
 
 	for i in range(0, point_img.shape[0]):
 		for j in range(0, point_img.shape[1]):
@@ -170,14 +180,21 @@ def find_min_neighborhood(x, y, patch, known_patch_mask, point_img, img, eps):
 				continue 
 			
 			# TODO: temp set img to zero where unknown
-			temp_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-			temp_img[i-eps:i+eps+1, j-eps:j+eps+1] = temp_img[i-eps:i+eps+1, j-eps:j+eps+1] * known_patch_mask[:,:,0]
-			_, sift_comp_patch = sift.compute(temp_img, [cv2.KeyPoint(i, j, _size=2*eps+1)]) # TODO: replace w sift
+			comp_patch_grad = np.zeros((2*eps+1, 2*eps+1, 2))
+
+			for deltaxx in range(-eps, eps+1):
+				for deltayy in range(-eps, eps+1):
+					if checkBounds(i+deltaxx, j+deltayy, 1, 1, point_img.shape):
+						known_patch_mask[deltaxx+eps,deltayy+eps,:] = [0, 0, 0]
+
+					else:
+						comp_patch_grad[deltaxx+eps, deltayy+eps, 0] = float(temp[i+deltaxx+1, j+deltayy]) - float(temp[i+deltaxx-1, j+deltayy])
+						comp_patch_grad[deltaxx+eps, deltayy+eps, 1] = float(temp[i+deltaxx, j+deltayy+1]) - float(temp[i+deltaxx, j+deltayy-1])
+			# temp_img[i-eps:i+eps+1, j-eps:j+eps+1] = temp_img[i-eps:i+eps+1, j-eps:j+eps+1] * known_patch_mask[:,:,0]
+			# _, sift_comp_patch = sift.compute(temp_img, [cv2.KeyPoint(i, j, _size=2*eps+1)]) # TODO: replace w sift
 			# print(sift_comp_patch)
 			# print(temp_img[i-eps:i+eps+1, j-eps:j+eps+1])
-			curr_dist = np.sum((sift_patch - sift_comp_patch)**2) 
-
-
+			curr_dist = np.sum(((curr_patch - comp_patch_grad)**2) * known_patch_mask[:,:,0:2]) 
 					 
 			if (min_dist > curr_dist):
 				min_dist = curr_dist
@@ -356,7 +373,7 @@ mask = create_mask(img, list(dogs.values()), 5)
 mask = cv2.resize(mask, (300, 200))
 img = cv2.resize(img, (300, 200))
 final_img = inpaint_exemplar(img, mask, eps = 3)
-cv2.imwrite('!!!!DONE.jpg', final_img)
+cv2.imwrite('FASTDONE.jpg', final_img)
 # cv2.imshow('fast marching', final_img)
 # cv2.waitKey(0)
 # cv2.destroyAllWindows()

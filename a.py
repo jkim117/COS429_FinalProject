@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import copy 
 import heapq
+from scipy.stats import pearsonr
 
 BAND = 0
 KNOWN = 1
@@ -63,22 +64,23 @@ def pad_mask(shape, mask, pad_size=1):
 def create_mask(img, mask_list, pad_size=1):
 	shape = (*img.shape[:2], 1)
 	comb_mask = np.zeros(shape, dtype=np.uint8)
+	# i =0
 
 	for mask in mask_list:
+		# if i ==0:
 		comb_mask[mask] = 255
-		break
+			# i += 1
 
 	comb_mask = pad_mask(shape, comb_mask, pad_size)
 
 	return comb_mask
 
 class Point():
-	def __init__(self, conf, data, I, f, orig_band, x, y):
+	def __init__(self, conf, data, I, f, x, y):
 		self.conf = conf # C(p)
 		self.data = data # D(p)
 		self.I = I # pixel value
 		self.f = f # 0 for BAND, 1 for KNOWN, 2 for INSIDE
-		self.orig_band = orig_band
 		self.x = x
 		self.y = y
 
@@ -114,12 +116,12 @@ def findBand(img, mask, first=False, point_image=None):
 
 			if (num_black > 0 and num_white > 0): # boundary
 				if first:
-					point_image[i, j] = Point(0.0, 0.0, img[i,j,:], BAND, True, i, j)
+					point_image[i, j] = Point(0.0, 0.0, img[i,j,:], BAND, i, j)
 				bandHeap.append(point_image[i, j])
 			elif (num_black == 0 and first): # inside boundary
-				point_image[i, j] = Point(0.0, 0.0, img[i,j,:], INSIDE, False, i, j)
+				point_image[i, j] = Point(0.0, 0.0, img[i,j,:], INSIDE, i, j)
 			elif first: # outside boundary
-				point_image[i, j] = Point(1.0, 0.0, img[i,j,:], KNOWN, False, i, j)
+				point_image[i, j] = Point(1.0, 0.0, img[i,j,:], KNOWN, i, j)
 
 	return bandHeap, point_image
 
@@ -132,25 +134,23 @@ def updateBand(bandHeapList, eps, x, y, point_image):
 	
 	return bandHeapList
 
+
 # min dist between bandPoint neighborhood and neighborhood within known
-def find_min_neighborhood(x, y, patch, known_patch_mask, point_img, img, eps):
+def find_min_neighborhood(x, y, patch, known_patch_mask, point_img, eps):
 	min_dist = np.inf
 	min_middle = (-1, -1) 
 
-	# TODO: temp set img to zero where unknown
-	temp_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-	temp_img[x-eps:x+eps+1, y-eps:y+eps+1] = temp_img[x-eps:x+eps+1, y-eps:y+eps+1] * known_patch_mask[:,:,0]
+	patch = np.ravel(patch * known_patch_mask)
 
-	# TODO: sift descriptor for patch
-	sift = cv2.xfeatures2d_SIFT.create() # cv2.SIFT()
-	_, sift_patch = sift.compute(temp_img, [cv2.KeyPoint(x, y, _size=2*eps+1)])
-	print(sift_patch) # all zeros...
-	print(temp_img[x-eps:x+eps+1, y-eps:y+eps+1])
-
+	# for i in range(eps, point_img.shape[0] - eps):
+	# 	for j in range(eps, point_img.shape[1] - eps):
+	#for i in range(x-100, x+101):
+	#	for j in range(y-100, y+101):
 	for i in range(0, point_img.shape[0]):
 		for j in range(0, point_img.shape[1]):
 
 			break_iter = False
+
 
 			comp_patch = np.zeros((2*eps+1, 2*eps+1, 3))
 
@@ -168,16 +168,9 @@ def find_min_neighborhood(x, y, patch, known_patch_mask, point_img, img, eps):
 
 			if (np.sum(comp_patch) == 0 or break_iter):
 				continue 
-			
-			# TODO: temp set img to zero where unknown
-			temp_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-			temp_img[i-eps:i+eps+1, j-eps:j+eps+1] = temp_img[i-eps:i+eps+1, j-eps:j+eps+1] * known_patch_mask[:,:,0]
-			_, sift_comp_patch = sift.compute(temp_img, [cv2.KeyPoint(i, j, _size=2*eps+1)]) # TODO: replace w sift
-			# print(sift_comp_patch)
-			# print(temp_img[i-eps:i+eps+1, j-eps:j+eps+1])
-			curr_dist = np.sum((sift_patch - sift_comp_patch)**2) 
 
-
+			comp_patch = np.ravel(comp_patch * known_patch_mask)
+			curr_dist, _ = pearsonr(patch, comp_patch)
 					 
 			if (min_dist > curr_dist):
 				min_dist = curr_dist
@@ -198,17 +191,22 @@ def inpaint_exemplar(img, mask, eps = 9):
 	oldX = -1
 	oldY = -1
 
-	# TODO: gaussian filter
-	sigma = 2
-	filter_size = 2
-	indices = np.array(range(-filter_size, filter_size + 1))
-	gaussianWeights = (1 / (np.sqrt(2 * np.pi * sigma * sigma))) * np.exp((indices * indices) / (-2 * sigma * sigma))
-	gaussianKernel = np.outer(gaussianWeights, gaussianWeights)
-	smooth_filter = 1 / np.sum(gaussianKernel) * gaussianKernel
-
 	while(len(bandHeapList) > 0):
 		print(len(bandHeapList))
 		# compute data terms
+
+		'''counter += 1
+		print('counter', counter)
+		if counter % 1 == 0:
+			cv2.imshow('fast marching', img)
+			cv2.waitKey(0)
+			cv2.destroyAllWindows()
+			band_image = np.zeros(mask.shape)
+			for c in bandHeapList:
+				band_image[c.x,c.y] = 255
+			cv2.imshow('band', band_image)
+			cv2.waitKey(0)
+			cv2.destroyAllWindows()'''
 
 		# find normal 
 		grad_X = cv2.Scharr(mask, cv2.CV_64F, 1, 0)
@@ -269,9 +267,7 @@ def inpaint_exemplar(img, mask, eps = 9):
 					patch[i-x+eps, j-y+eps, :] = point_image[i, j].I
 					known_patch_mask[i-x+eps, j-y+eps, :] = [1, 1, 1]
 
-		best_x, best_y = find_min_neighborhood(x, y, patch, known_patch_mask, point_image, img, eps)
-
-		band_pixels = []
+		best_x, best_y = find_min_neighborhood(x, y, patch, known_patch_mask, point_image, eps)
 
 		# inpaint, update img and point_img
 		for deltax in range(-eps, eps+1):
@@ -281,56 +277,17 @@ def inpaint_exemplar(img, mask, eps = 9):
 					img[x+deltax, y+deltay, :] = img[best_x+deltax, best_y+deltay, :]
 					if point_image[x+deltax,y+deltay].f == BAND:
 						bandHeapList.remove(point_image[x+deltax, y+deltay])
-						band_pixels.append((x+deltax, y+deltay))
 
 					point_image[x+deltax, y+deltay].f = KNOWN
 					point_image[x+deltax, y+deltay].conf = point_image[x, y].conf
 					mask[x+deltax, y+deltay] = 0
-
-		# TODO: smooth / run gaussian filter over patch edge 
-		neighborhood = np.zeros((2*filter_size+1, 2*filter_size+1, 3))
-
-		prev_known = img[x, y]
-		for x, y in band_pixels:
-			if point_image[x, y].orig_band:
-				for deltax in range(-filter_size, filter_size+1):
-					if (x+deltax) < 0:
-						neighborhood[deltax+filter_size, :,:] = point_image[0, y].I
-						continue
-
-					elif (x+deltax) >= point_image.shape[0]:
-						neighborhood[deltax+filter_size, :,:] = point_image[point_image.shape[0], y].I
-						continue
-
-					else:
-						if point_image[x+deltax, y].f == KNOWN:
-							prev_known = point_image[x+deltax, y].I
-
-						neighborhood[deltax+filter_size, 0,:] = prev_known	
-
-					for deltay in range(-filter_size, filter_size+1):
-						if (y+deltay) < 0:
-							neighborhood[deltax+filter_size, deltay+filter_size,:] = point_image[x+deltax, 0].I
-
-						elif (y+deltay) >= point_image.shape[1]:
-							neighborhood[deltax+filter_size, deltay+filter_size,:] = point_image[x+deltax, point_image.shape[1]].I
-
-						else:
-							if point_image[x+deltax, y+deltay].f == KNOWN:
-								prev_known = point_image[x+deltax, y+deltay].I
-
-							neighborhood[deltax+filter_size, deltay+filter_size,:] = prev_known		
-
-				new_pixel  = np.sum(neighborhood * np.expand_dims(smooth_filter, axis=2), axis=(0, 1))
-				point_image[x, y].I = new_pixel
-				img[x, y] = new_pixel
 
 		bandHeap = updateBand(bandHeapList, eps, x, y, point_image)
 		oldX = x
 		oldY = y
 		bandHeapList = bandHeap.copy()
 
-		# cv2.imshow('fast marching', img)
+		# cv2.imshow('fast marching', mask)
 		# cv2.waitKey(0)
 		# cv2.destroyAllWindows()
 
@@ -339,25 +296,9 @@ def inpaint_exemplar(img, mask, eps = 9):
 
 imgs = [bear_img, banana_img, elephant_img, plane_img, plane_img, airplanes_img, fence_img, stuff_img, stuff_img, img, img, motor_img, motor_img, donut_img, donut_img]
 npzs = [bear, banana, elephant, plane, people, airplane, fence, stuff, ppl, person, dogs, more_ppl, motor, donut, knife]
-'''
-for i in range(0, len(imgs)):
-	# len(imgs)
-	img = imgs[i]
-	npz = npzs[i]
-	mask = create_mask(img, list(npz.values()), 5)
-	cv2.imwrite('./outputs/' + str(i) + 'mask.jpg', mask)
-	print(i, 'mask created')
-	final_img = inpaint_exemplar(img, mask, eps = 3)
-	cv2.imwrite('./outputs/'+ str(i) + 'DONE.jpg', final_img)
-'''
-# resize mask and img
 
 mask = create_mask(img, list(dogs.values()), 5)
 mask = cv2.resize(mask, (300, 200))
 img = cv2.resize(img, (300, 200))
 final_img = inpaint_exemplar(img, mask, eps = 3)
-cv2.imwrite('!!!!DONE.jpg', final_img)
-# cv2.imshow('fast marching', final_img)
-# cv2.waitKey(0)
-# cv2.destroyAllWindows()
-
+cv2.imwrite('FAST1DONE.jpg', final_img)
