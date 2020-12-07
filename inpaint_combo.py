@@ -44,6 +44,82 @@ donut_img = cv2.imread(curr_dir+'donut.jpg')
 donut = np.load(curr_dir+'donut.npz')
 knife = np.load(curr_dir+'knife.npz')
 
+def rgbToHsl(img):
+	hsl = np.zeros(img.shape)
+
+	for i in range(img.shape[0]):
+		for j in range(img.shape[1]):
+			r = float(img[i,j,0]) / 255
+			g = float(img[i,j,1]) / 255
+			b = float(img[i,j,2]) / 255
+
+			pixelMax = max(r,g,b)
+			pixelMin = min(r,g,b)
+
+			l = (pixelMax + pixelMin) / 2.0
+			h = 0
+			s = 0
+
+			if pixelMax != pixelMin:
+				d = pixelMax - pixelMin
+				if l > 0.5:
+					s = d / (2 - pixelMax - pixelMin)
+				else:
+					s = d / (pixelMax + pixelMin)
+
+				if pixelMax == r:
+					if g < b:
+						h = (g - b) / d + 6
+					else:
+						h = (g - b) / d
+
+				elif pixelMax == g:
+					h = (b - r) / d + 2
+				else:
+					h = (r - g) / d + 4
+				
+				h /= 6
+			hsl[i,j,:] = [h * 255,s * 255,l * 255]
+	return hsl.astype(np.uint8)
+
+def hueToRgb(m1, m2, h):
+	if h < 0:
+		h = h + 1
+	elif h > 1:
+		h = h - 1
+	
+	if (h * 6 < 1):
+		return m1 + (m2 - m1) * h * 6
+	if (h * 2 < 1):
+		return m2
+	if (h * 3 < 2):
+		return m1 + (m2 - m1) * (0.66666 - h) * 6
+	return m1
+
+def hslToRgb(img):
+	rgb = np.zeros(img.shape)
+
+	for i in range(img.shape[0]):
+		for j in range(img.shape[1]):
+			h = float(img[i,j,0]) / 255.0
+			s = float(img[i,j,1]) / 255.0
+			l = float(img[i,j,2]) / 255.0
+
+			if l <= 0.5:
+				m2 = l * (s + 1)
+			else:
+				m2 = l + s - l * s
+			m1 = l * 2 - m2
+
+			r = hueToRgb(m1, m2, h + 1/3) * 255
+			g = hueToRgb(m1, m2, h) * 255
+			b = hueToRgb(m1, m2, h - 1/3) * 255
+
+			rgb[i,j,:] = [r,g,b]
+
+	return rgb.astype(np.uint8)
+
+
 def pad_mask(shape, mask, pad_size=1):
 	height, width, _ = shape
 	original_mask = copy.deepcopy(mask)
@@ -63,12 +139,12 @@ def pad_mask(shape, mask, pad_size=1):
 def create_mask(img, mask_list, pad_size=1):
 	shape = (*img.shape[:2], 1)
 	comb_mask = np.zeros(shape, dtype=np.uint8)
-	# i =0
+	#i =0
 
 	for mask in mask_list:
-		# if i ==0:
+		#if i ==0:
 		comb_mask[mask] = 255
-			# i += 1
+			#i += 1
 
 	comb_mask = pad_mask(shape, comb_mask, pad_size)
 
@@ -139,12 +215,12 @@ def find_min_neighborhood(x, y, patch, known_patch_mask, point_img, eps):
 	min_dist = np.inf
 	min_middle = (-1, -1) 
 
-	# for i in range(eps, point_img.shape[0] - eps):
-	# 	for j in range(eps, point_img.shape[1] - eps):
+	for i in range(eps, point_img.shape[0] - eps):
+		for j in range(eps, point_img.shape[1] - eps):
 	#for i in range(x-100, x+101):
 	#	for j in range(y-100, y+101):
-	for i in range(0, point_img.shape[0]):
-		for j in range(0, point_img.shape[1]):
+	#for i in range(0, point_img.shape[0]):
+		#for j in range(0, point_img.shape[1]):
 
 			break_iter = False
 
@@ -283,42 +359,208 @@ def inpaint_exemplar(img, mask, eps = 9):
 		oldY = y
 		bandHeapList = bandHeap.copy()
 
+		# cv2.imshow('fast marching', mask)
+		# cv2.waitKey(0)
+		# cv2.destroyAllWindows()
 
 
 	return img
+
+class PointFmm():
+	def __init__(self, T, I, f, x, y):
+		self.T = T # distance from band border
+		self.I = I # pixel value
+		self.f = f # 0 for BAND, 1 for KNOWN, 2 for INSIDE
+		self.x = x
+		self.y = y
+
+	def __lt__(self, other):
+		return self.T < other.T
+
+def findBandFmm(img_channel, mask):
+	boundImg = np.zeros(mask.shape)
+	bandHeap = []
+	point_image = np.empty(shape = img_channel.shape, dtype = object)
+
+	for i in range(mask.shape[0]):
+		for j in range(mask.shape[1]):
+
+			num_black = 0
+			num_white = 0
+			for k in [-1, 1]:
+				for l in [-1, 1]:
+					if (checkBounds(i, j, k, l, mask.shape)):
+						num_black += 1
+						continue
+					
+					if (mask[i + k, j + l] == 255):
+						num_white += 1
+					else:
+						num_black += 1
+					
+			if (num_black > 0 and num_white > 0): # boundary
+				point_image[i, j] = PointFmm(0.0, img_channel[i,j], BAND, i, j)
+				boundImg[i,j] = 255
+				bandHeap.append(point_image[i, j])
+			elif (num_black == 0): # inside boundary
+				point_image[i, j] = PointFmm(1.0e6, img_channel[i,j], INSIDE, i, j)
+			else: # outside boundary
+				point_image[i, j] = PointFmm(0.0, img_channel[i,j], KNOWN, i, j)
+
+	heapq.heapify(bandHeap)
+	#cv2.imshow('navier stokes', boundImg)
+	#cv2.waitKey(0)
+	#cv2.destroyAllWindows()
+	return bandHeap, point_image
+						
+def inpaint_fmm_single(point, point_image, img_grad, eps):
+	Ia = 0.0
+	s = 0.0
+
+	for k in range(-eps, eps + 1):
+		for l in range(-eps, eps + 1):
+			
+			if (k == 0 and l == 0):
+				continue
+			xk = point.x + k
+			yl = point.y + l
+			if (checkBounds(xk, yl, 0, 0, point_image.shape)):
+				continue
+
+			if (point_image[xk, yl].f == KNOWN):
+				if (not checkBounds(xk+1, yl, 0, 0, point_image.shape) and
+					not checkBounds(xk-1, yl, 0, 0, point_image.shape) and
+					not checkBounds(xk, yl+1, 0, 0, point_image.shape) and
+					not checkBounds(xk, yl-1, 0, 0, point_image.shape)):	
+
+					r = np.array([xk - point.x, yl - point.y])
+					gradT_X = point_image[xk+1, yl].T - point_image[xk-1, yl].T
+					gradT_Y = point_image[xk, yl+1].T - point_image[xk, yl-1].T
+					gradT = np.array([gradT_X, gradT_Y]) # use same approx as gradI???
+					lenr = np.linalg.norm(r)
+
+					direction = np.sum(r * gradT) / lenr
+					
+					dst = 1 / (lenr * lenr)
+					lev = 1 / (1 + np.absolute(point.T - point_image[xk, yl].T))
+
+					w = np.absolute(direction * dst * lev)
+					if (w == 0.0):
+						w = 1e-6
+
+					#print(w>0)
+					#print(w)
+					#print(point_image[xk+1, yl].f ,point_image[xk-1, yl].f,point_image[xk, yl+1].f,point_image[xk, yl-1].f)
+
+					#if (point_image[xk+1, yl].f == KNOWN and point_image[xk-1, yl].f == KNOWN and point_image[xk, yl+1].f == KNOWN and point_image[xk, yl-1].f == KNOWN):
+					gradI_X = float(point_image[xk+1, yl].I) - float(point_image[xk-1, yl].I)
+					gradI_Y = float(point_image[xk, yl+1].I) - float(point_image[xk, yl-1].I)
+					gradI = np.array([gradI_X, gradI_Y])		
+					#print('hiii')		
+
+					Ia += w * point_image[xk, yl].I #+ np.absolute(np.sum(gradI * r)))
+					s += w
+	#print(Ia/s)
+	if s == 0.0:
+		point_image[point.x, point.y].f = INSIDE
+		return 0
+
+	point_image[point.x, point.y].I = Ia / s
+	return 0
+	#print(Ia)
+	#print(s)
+
+
+def solveT(i1, j1, i2, j2, point_image):
+	if (checkBounds(i1, j1, 0, 0, point_image.shape) or checkBounds(i2, j2, 0, 0, point_image.shape)):
+		return np.inf
+
+	sol = 1.0e6
+	if (point_image[i1,j1].f == KNOWN):
+		if (point_image[i2,j2] == KNOWN):
+			r = np.sqrt(2 - (point_image[i1,j1].T - point_image[i2,j2].T) * (point_image[i1,j1].T - point_image[i2,j2].T))
+			s = (point_image[i1,j1].T + point_image[i2,j2].T - r) / 2.0
+
+			if (s >= point_image[i1,j1].T and s >= point_image[i2,j2].T):
+				sol = s
+			else:
+				s += r
+				if (s >= point_image[i1,j1].T and s >= point_image[i2,j2]):
+					sol = s
+		else:
+			sol = 1 + point_image[i1,j1].T
+		
+	elif (point_image[i2,j2].f == KNOWN):
+		sol = 1 + point_image[i2,j2].T
+	
+	return sol
+
+
+def inpaint_fmm(img, mask, eps = 10):
+	new_img = np.zeros(img.shape, dtype=np.uint8)
+	new_img[:,:,:2] = img[:,:,:2]
+	img_channel = img[:,:,2]
+	img_grad = cv2.Laplacian(img_channel, cv2.CV_64F)
+
+	bandHeap, point_image = findBandFmm(img_channel, mask)
+	
+	while(len(bandHeap) > 0):
+		bandPoint = heapq.heappop(bandHeap)
+		#print(bandPoint.x,bandPoint.y, bandPoint.T)
+		point_image[bandPoint.x, bandPoint.y].f = KNOWN
+
+		for k in [-1, 1]:
+			for l in [-1, 1]:
+				xk = bandPoint.x + k
+				yl = bandPoint.y + l
+
+				if (checkBounds(bandPoint.x, bandPoint.y, k, l, mask.shape)):
+					continue
+				if (point_image[xk, yl].f != KNOWN): # if point is not known
+					if (point_image[xk, yl].f == INSIDE): # if point is inside
+						point_image[xk, yl].f = BAND
+
+						err = inpaint_fmm_single(point_image[xk, yl], point_image, img_grad, eps) # TODO
+						if err == -1:
+							point_image[bandPoint.x, bandPoint.y].f = BAND
+							point_image[bandPoint.x, bandPoint.y].T += 1
+							heapq.heappush(bandHeap, point_image[bandPoint.x, bandPoint.y])
+							continue
+
+					# if out of bounds, solveT = INF
+					point_image[xk, yl].T = min([solveT(xk - 1, yl, xk, yl - 1, point_image),
+													solveT(xk + 1, yl, xk, yl - 1, point_image),
+													solveT(xk - 1, yl, xk, yl + 1, point_image),
+													solveT(xk + 1, yl, xk, yl + 1, point_image)])
+
+					heapq.heappush(bandHeap, point_image[xk, yl])
+
+	new_channel = np.zeros((img.shape[0], img.shape[1]))
+	for k in range(0, img.shape[0]):
+		for l in range(0, img.shape[1]):
+			new_channel[k,l] = point_image[k,l].I
+	
+	new_img[:,:,2] = new_channel
+	print('finished one channel')
+
+	return new_img
 
 imgs = [bear_img, banana_img, elephant_img, plane_img, plane_img, airplanes_img, fence_img, stuff_img, stuff_img, img, img, motor_img, motor_img, donut_img, donut_img]
 npzs = [bear, banana, elephant, plane, people, airplane, fence, stuff, ppl, person, dogs, more_ppl, motor, donut, knife]
 
 for i in range(4, len(imgs)):
-	# len(imgs)	
 	imgg = imgs[i]
 	npz = npzs[i]
-	mask = create_mask(imgg, list(npz.values()), 5)
+	
+	mask = create_mask(imgg, list(npz.values()), 5) # pad 20 with bear and plane, pad 5 with others
+	mask = np.squeeze(mask, axis = 2)
+
 	imgg = cv2.resize(imgg, (imgg.shape[1]//2, imgg.shape[0]//2))
 	mask = cv2.resize(mask, (mask.shape[1]//2, mask.shape[0]//2))
-#	cv2.imwrite('./outputs/' + str(i) + 'HALFmask.jpg', mask)
 	print(i, 'mask created')
-	final_img = inpaint_exemplar(imgg, mask, eps = 6)
-	cv2.imwrite('./outputs/'+ str(i) + 'BIG_HALFDONE.jpg', final_img)
-
-# mask = create_mask(img, list(dogs.values()), 20)
-
-# resize mask and img
-#mask = cv2.resize(mask, (100, 150))
-#img = cv2.resize(img, (100, 150))
-
-# mask = create_mask(img, list(person.values()), 10)
-# print(img.shape)
-# print(mask.shape)
-# final_img = inpaint_exemplar(img, mask, eps = 10)
-
-# fast_marching = cv2.inpaint(img, mask, 2, cv2.INPAINT_TELEA)
-#navier_stokes = cv2.inpaint(img, mask, 2, cv2.INPAINT_NS)
-
-# cv2.imshow('fast marching', fast_marching)
-# cv2.imshow('navier stokes', final_img)
-# cv2.imwrite('./DONE1.jpg', final_img)
-# cv2.waitKey(0)
-# cv2.destroyAllWindows()
-
+	
+	final_img = inpaint_exemplar(imgg, mask, eps = 3)
+	final_img = rgbToHsl(final_img)
+	final_img = inpaint_fmm(final_img, mask, eps = 3)
+	final_img = hslToRgb(final_img)
+	cv2.imwrite('./outputs/'+ str(i) + 'DONE_combo.jpg', final_img)

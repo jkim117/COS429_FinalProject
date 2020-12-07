@@ -44,6 +44,82 @@ donut_img = cv2.imread(curr_dir+'donut.jpg')
 donut = np.load(curr_dir+'donut.npz')
 knife = np.load(curr_dir+'knife.npz')
 
+def rgbToHsl(img):
+	hsl = np.zeros(img.shape)
+
+	for i in range(img.shape[0]):
+		for j in range(img.shape[1]):
+			r = float(img[i,j,0]) / 255
+			g = float(img[i,j,1]) / 255
+			b = float(img[i,j,2]) / 255
+
+			pixelMax = max(r,g,b)
+			pixelMin = min(r,g,b)
+
+			l = (pixelMax + pixelMin) / 2.0
+			h = 0
+			s = 0
+
+			if pixelMax != pixelMin:
+				d = pixelMax - pixelMin
+				if l > 0.5:
+					s = d / (2 - pixelMax - pixelMin)
+				else:
+					s = d / (pixelMax + pixelMin)
+
+				if pixelMax == r:
+					if g < b:
+						h = (g - b) / d + 6
+					else:
+						h = (g - b) / d
+
+				elif pixelMax == g:
+					h = (b - r) / d + 2
+				else:
+					h = (r - g) / d + 4
+				
+				h /= 6
+			hsl[i,j,:] = [h * 255,s * 255,l * 255]
+	return hsl.astype(np.uint8)
+
+def hueToRgb(m1, m2, h):
+	if h < 0:
+		h = h + 1
+	elif h > 1:
+		h = h - 1
+	
+	if (h * 6 < 1):
+		return m1 + (m2 - m1) * h * 6
+	if (h * 2 < 1):
+		return m2
+	if (h * 3 < 2):
+		return m1 + (m2 - m1) * (0.66666 - h) * 6
+	return m1
+
+def hslToRgb(img):
+	rgb = np.zeros(img.shape)
+
+	for i in range(img.shape[0]):
+		for j in range(img.shape[1]):
+			h = float(img[i,j,0]) / 255.0
+			s = float(img[i,j,1]) / 255.0
+			l = float(img[i,j,2]) / 255.0
+
+			if l <= 0.5:
+				m2 = l * (s + 1)
+			else:
+				m2 = l + s - l * s
+			m1 = l * 2 - m2
+
+			r = hueToRgb(m1, m2, h + 1/3) * 255
+			g = hueToRgb(m1, m2, h) * 255
+			b = hueToRgb(m1, m2, h - 1/3) * 255
+
+			rgb[i,j,:] = [r,g,b]
+
+	return rgb.astype(np.uint8)
+
+
 def pad_mask(shape, mask, pad_size=1):
 	height, width, _ = shape
 	original_mask = copy.deepcopy(mask)
@@ -63,12 +139,13 @@ def pad_mask(shape, mask, pad_size=1):
 def create_mask(img, mask_list, pad_size=1):
 	shape = (*img.shape[:2], 1)
 	comb_mask = np.zeros(shape, dtype=np.uint8)
-	# i =0
+	#i =0
 
 	for mask in mask_list:
-		# if i ==0:
+		#if i ==0:
 		comb_mask[mask] = 255
-			# i += 1
+		# break
+			#i += 1
 
 	comb_mask = pad_mask(shape, comb_mask, pad_size)
 
@@ -139,12 +216,12 @@ def find_min_neighborhood(x, y, patch, known_patch_mask, point_img, eps):
 	min_dist = np.inf
 	min_middle = (-1, -1) 
 
-	# for i in range(eps, point_img.shape[0] - eps):
-	# 	for j in range(eps, point_img.shape[1] - eps):
+	for i in range(eps, point_img.shape[0] - eps):
+		for j in range(eps, point_img.shape[1] - eps):
 	#for i in range(x-100, x+101):
 	#	for j in range(y-100, y+101):
-	for i in range(0, point_img.shape[0]):
-		for j in range(0, point_img.shape[1]):
+	#for i in range(0, point_img.shape[0]):
+		#for j in range(0, point_img.shape[1]):
 
 			break_iter = False
 
@@ -283,24 +360,52 @@ def inpaint_exemplar(img, mask, eps = 9):
 		oldY = y
 		bandHeapList = bandHeap.copy()
 
+		# cv2.imshow('fast marching', mask)
+		# cv2.waitKey(0)
+		# cv2.destroyAllWindows()
 
 
 	return img
+
 
 imgs = [bear_img, banana_img, elephant_img, plane_img, plane_img, airplanes_img, fence_img, stuff_img, stuff_img, img, img, motor_img, motor_img, donut_img, donut_img]
 npzs = [bear, banana, elephant, plane, people, airplane, fence, stuff, ppl, person, dogs, more_ppl, motor, donut, knife]
 
 for i in range(4, len(imgs)):
-	# len(imgs)	
-	imgg = imgs[i]
+	#if i!=3:
+	#	continue
+	# len(imgs)
+	img = imgs[i]
 	npz = npzs[i]
-	mask = create_mask(imgg, list(npz.values()), 5)
-	imgg = cv2.resize(imgg, (imgg.shape[1]//2, imgg.shape[0]//2))
-	mask = cv2.resize(mask, (mask.shape[1]//2, mask.shape[0]//2))
-#	cv2.imwrite('./outputs/' + str(i) + 'HALFmask.jpg', mask)
+	
+	if i == 0 or i ==3:
+		mask = create_mask(img, list(npz.values()), 20) # pad 20 with bear and plane, pad 5 with others
+	else:
+		mask = create_mask(img, list(npz.values()), 5) # pad 20 with bear and plane, pad 5 with others
+	mask = np.squeeze(mask, axis = 2)
+
+	mask = cv2.resize(mask, (0, 0), fx=0.5,fy=0.5)
+	img = cv2.resize(img, (0, 0), fx=0.5,fy=0.5)
+
+	#cv2.imwrite('./outputs/' + str(i) + 'mask.jpg', mask)
 	print(i, 'mask created')
-	final_img = inpaint_exemplar(imgg, mask, eps = 6)
-	cv2.imwrite('./outputs/'+ str(i) + 'BIG_HALFDONE.jpg', final_img)
+	#img_with_mask = np.copy(img)
+	#img_with_mask[mask == 255, :] = [255, 255, 255]
+
+	#cv2.imwrite('./exemplar_outputs/' + str(i)+'image_with_mask.jpg', img_with_mask)
+
+	'''cv2.imshow('mask_display', img_with_mask)
+	cv2.waitKey(0)
+	cv2.destroyAllWindows()
+	cv2.imshow('img_display', img)
+	cv2.waitKey(0)
+	cv2.destroyAllWindows()'''
+
+	final_img = rgbToHsl(img)
+	final_img = inpaint_exemplar(final_img, mask, eps = 3)
+	#final_img = inpaint_fmm(final_img, mask, eps = 3)
+	final_img = hslToRgb(final_img)
+	cv2.imwrite('./'+ str(i) + 'DONE_hsl.jpg', final_img)
 
 # mask = create_mask(img, list(dogs.values()), 20)
 
