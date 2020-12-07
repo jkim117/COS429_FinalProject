@@ -6,14 +6,14 @@ from inpaint_exemplar import inpaint_exemplar
 from inpaint_hsl import rgbToHsl, inpaint_exemplar, hslToRgb
 
 mask_path = sys.argv[1]
-mask = cv2.imread(mask_path)
+mask = cv2.cvtColor(cv2.imread(mask_path), cv2.COLOR_BGR2GRAY)
 
 img_path = sys.argv[2]
 img = cv2.imread(img_path)
 
-eps = sys.argv[3]
+eps = int(sys.argv[3])
 method = sys.argv[4]
-output_path = sys.arg[5]
+output_path = sys.argv[5]
 
 if method == 'FMM':
 	output_img = inpaint_fmm(img, mask, eps)

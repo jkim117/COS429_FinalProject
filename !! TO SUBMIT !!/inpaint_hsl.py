@@ -7,42 +7,6 @@ BAND = 0
 KNOWN = 1
 INSIDE = 2
 
-curr_dir = './eval_set/'
-
-bear_img = cv2.imread(curr_dir+'bear.jpg')
-bear = np.load(curr_dir+'bear.npz')
-
-banana_img = cv2.imread(curr_dir+'banana.jpg')
-banana = np.load(curr_dir+'banana.npz')
-
-elephant_img = cv2.imread(curr_dir+'elephant_people.jpg')
-elephant = np.load(curr_dir+'elephant_people.npz')
-
-plane_img = cv2.imread(curr_dir+'plane.jpg')
-plane = np.load(curr_dir+'plane.npz')
-people = np.load(curr_dir+'people.npz')
-
-airplanes_img = cv2.imread(curr_dir+'airplane.jpg')
-airplane = np.load(curr_dir+'airplane.npz')
-
-fence_img = cv2.imread(curr_dir+'fence.jpg')
-fence = np.load(curr_dir+'fence.npz')
-
-stuff_img = cv2.imread(curr_dir+'stuff.jpg')
-stuff = np.load(curr_dir+'stuff.npz')
-ppl = np.load(curr_dir+'ppl.npz')
-
-img = cv2.imread(curr_dir+'test.jpg')
-person = np.load(curr_dir+'persons.npz')
-dogs = np.load(curr_dir+'dogs.npz')
-
-motor_img = cv2.imread(curr_dir+'motor.jpg')
-more_ppl = np.load(curr_dir+'more_ppl.npz')
-motor = np.load(curr_dir+'motor.npz')
-
-donut_img = cv2.imread(curr_dir+'donut.jpg')
-donut = np.load(curr_dir+'donut.npz')
-knife = np.load(curr_dir+'knife.npz')
 
 def rgbToHsl(img):
 	hsl = np.zeros(img.shape)
@@ -366,64 +330,4 @@ def inpaint_exemplar(img, mask, eps = 9):
 
 
 	return img
-
-
-imgs = [bear_img, banana_img, elephant_img, plane_img, plane_img, airplanes_img, fence_img, stuff_img, stuff_img, img, img, motor_img, motor_img, donut_img, donut_img]
-npzs = [bear, banana, elephant, plane, people, airplane, fence, stuff, ppl, person, dogs, more_ppl, motor, donut, knife]
-
-for i in range(4, len(imgs)):
-	#if i!=3:
-	#	continue
-	# len(imgs)
-	img = imgs[i]
-	npz = npzs[i]
-	
-	if i == 0 or i ==3:
-		mask = create_mask(img, list(npz.values()), 20) # pad 20 with bear and plane, pad 5 with others
-	else:
-		mask = create_mask(img, list(npz.values()), 5) # pad 20 with bear and plane, pad 5 with others
-	mask = np.squeeze(mask, axis = 2)
-
-	mask = cv2.resize(mask, (0, 0), fx=0.5,fy=0.5)
-	img = cv2.resize(img, (0, 0), fx=0.5,fy=0.5)
-
-	#cv2.imwrite('./outputs/' + str(i) + 'mask.jpg', mask)
-	print(i, 'mask created')
-	#img_with_mask = np.copy(img)
-	#img_with_mask[mask == 255, :] = [255, 255, 255]
-
-	#cv2.imwrite('./exemplar_outputs/' + str(i)+'image_with_mask.jpg', img_with_mask)
-
-	'''cv2.imshow('mask_display', img_with_mask)
-	cv2.waitKey(0)
-	cv2.destroyAllWindows()
-	cv2.imshow('img_display', img)
-	cv2.waitKey(0)
-	cv2.destroyAllWindows()'''
-
-	final_img = rgbToHsl(img)
-	final_img = inpaint_exemplar(final_img, mask, eps = 3)
-	#final_img = inpaint_fmm(final_img, mask, eps = 3)
-	final_img = hslToRgb(final_img)
-	cv2.imwrite('./'+ str(i) + 'DONE_hsl.jpg', final_img)
-
-# mask = create_mask(img, list(dogs.values()), 20)
-
-# resize mask and img
-#mask = cv2.resize(mask, (100, 150))
-#img = cv2.resize(img, (100, 150))
-
-# mask = create_mask(img, list(person.values()), 10)
-# print(img.shape)
-# print(mask.shape)
-# final_img = inpaint_exemplar(img, mask, eps = 10)
-
-# fast_marching = cv2.inpaint(img, mask, 2, cv2.INPAINT_TELEA)
-#navier_stokes = cv2.inpaint(img, mask, 2, cv2.INPAINT_NS)
-
-# cv2.imshow('fast marching', fast_marching)
-# cv2.imshow('navier stokes', final_img)
-# cv2.imwrite('./DONE1.jpg', final_img)
-# cv2.waitKey(0)
-# cv2.destroyAllWindows()
 
